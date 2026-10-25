@@ -1,0 +1,32 @@
+# Android / Gradle
+.gradle/
+.kotlin/
+**/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE / local machine
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Credentials, signing keys and private local data
+.env
+.env.*
+!.env.example
+secrets.properties
+keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+private-data/
+
+# Build outputs
+*.apk
+*.aab
+*.apks
+*.hprof
