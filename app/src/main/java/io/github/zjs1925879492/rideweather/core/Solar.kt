@@ -1,27 +1,21 @@
 package io.github.zjs1925879492.rideweather.core
 
 import org.json.JSONObject
-import java.time.Instant
-import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
-data class SolarDay(val sunrise:Long?,val sunset:Long?)
 data class SolarEvent(val type:String,val time:Long,val km:Double,val phase:String,val remainingMinutes:Int)
 
-// Select by the event's actual local date, not the UTC daily bucket's date.
-// Null/zero solar times (including polar day/night) remain unavailable.
-fun solarDayAt(forecast:JSONObject,arrival:Long,zone:ZoneId):SolarDay? {
-    val daily=forecast.optJSONObject("daily") ?: return null
-    val date=Instant.ofEpochSecond(arrival).atZone(zone).toLocalDate()
-    fun time(type:String):Long? {
-        val values=daily.optJSONArray(type) ?: return null
-        return (0 until values.length()).mapNotNull { i ->
-            if(values.isNull(i)) null else values.optDouble(i).takeIf { it.isFinite() && it>0 }?.toLong()
-        }.firstOrNull { Instant.ofEpochSecond(it).atZone(zone).toLocalDate()==date }
-    }
-    return SolarDay(time("sunrise"),time("sunset"))
+sealed interface WeatherTimelineEntry {
+    val km:Double
+    data class Stop(val index:Int,override val km:Double):WeatherTimelineEntry
+    data class Sun(val event:SolarEvent):WeatherTimelineEntry { override val km get()=event.km }
 }
+// The website orders events by mileage; a nearby pre-departure event precedes
+// the start card, while events at a stop or after arrival follow that stop.
+fun weatherTimeline(samples:List<Sample>,events:List<SolarEvent>):List<WeatherTimelineEntry> =
+    (samples.mapIndexed { i,s -> WeatherTimelineEntry.Stop(i,s.km) }+events.map { WeatherTimelineEntry.Sun(it) })
+        .sortedWith(compareBy<WeatherTimelineEntry> { it.km }.thenBy { if(it is WeatherTimelineEntry.Sun) { if(it.event.phase=="before") -1 else 1 } else 0 })
 
 // Same ETA/solar crossing interpolation as the website; never bridge track gaps
 // or a missing forecast sample. Also include events within 30 minutes of the ride.

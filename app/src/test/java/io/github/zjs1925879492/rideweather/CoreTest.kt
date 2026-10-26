@@ -10,15 +10,28 @@ import org.junit.Test
 import java.time.Instant
 
 class CoreTest {
-    @Test fun solarDatesFollowBeijingArrivalAndKeepMissingValues() {
-        val sunrise=Instant.parse("2026-10-26T22:00:00Z").epochSecond
-        val sunset=Instant.parse("2026-10-27T09:00:00Z").epochSecond
-        val data=JSONObject().put("daily",JSONObject().put("time",JSONArray().put(sunrise-79200)).put("sunrise",JSONArray().put(sunrise)).put("sunset",JSONArray().put(sunset)))
-        assertEquals(SolarDay(sunrise,sunset),solarDayAt(data,Instant.parse("2026-10-27T02:00:00Z").epochSecond,BEIJING))
-        assertEquals(SolarDay(null,null),solarDayAt(data,Instant.parse("2026-10-28T02:00:00Z").epochSecond,BEIJING))
-        data.getJSONObject("daily").put("sunrise",JSONArray().put(JSONObject.NULL)).put("sunset",JSONArray().put(0))
-        assertEquals(SolarDay(null,null),solarDayAt(data,sunrise,BEIJING))
-        assertNull(solarDayAt(JSONObject(),sunrise,BEIJING))
+    @Test fun solarEventsMatchWebsiteGoldenAndDaytimeRideHasNoReminder() {
+        val samples=listOf(0.0,20.0,40.0).map { Sample(TrackPoint(31.0,119.0),it,0,0.0) }
+        val forecasts=(0..2).map { i -> JSONObject().put("daily",JSONObject().put("time",JSONArray().put(86400)).put("sunrise",JSONArray().put(100900+i*100)).put("sunset",JSONArray().put(106000+i*100))) }
+        // Captured by running the website's core.js solarRouteEvents on this fixture.
+        val events=solarRouteEvents(samples,forecasts,RidePlan(100000,20.0,0.0,20.0),40.0)
+        assertEquals(2,events.size)
+        assertEquals(SolarEvent("sunrise",100926,5.142857142857142,"during",105),events[0])
+        assertEquals("sunset",events[1].type); assertEquals(106171L,events[1].time)
+        assertEquals(34.285714285714285,events[1].km,1e-9); assertEquals(17,events[1].remainingMinutes)
+        // The trip is entirely between sunrise and sunset and not near either edge.
+        val daytime=List(3) { JSONObject().put("daily",JSONObject().put("time",JSONArray().put(86400)).put("sunrise",JSONArray().put(90000)).put("sunset",JSONArray().put(120000))) }
+        assertTrue(solarRouteEvents(samples,daytime,RidePlan(103000,80.0,0.0,20.0),40.0).isEmpty())
+        val absent=JSONObject().put("daily",JSONObject().put("time",JSONArray().put(86400)).put("sunrise",JSONArray().put(JSONObject.NULL)).put("sunset",JSONArray().put(0)))
+        assertTrue(solarRouteEvents(samples,List(3){absent},RidePlan(100000,20.0,0.0,20.0),40.0).isEmpty())
+    }
+    @Test fun solarTimelineInsertsEventsOnlyOnceAtTheirMileage() {
+        val samples=listOf(0.0,20.0,40.0).map { Sample(TrackPoint(31.0,119.0),it,0,0.0) }
+        val events=listOf(SolarEvent("sunrise",1,0.0,"before",0),SolarEvent("sunset",2,20.0,"during",0),SolarEvent("sunset",3,40.0,"after",0))
+        val timeline=weatherTimeline(samples,events)
+        assertEquals(listOf("sunrise","stop0","stop1","sunset","stop2","sunset"),timeline.map { when(it) { is WeatherTimelineEntry.Stop -> "stop${it.index}"; is WeatherTimelineEntry.Sun -> it.event.type } })
+        assertEquals(3,weatherTimeline(samples,emptyList()).size)
+        assertTrue(weatherTimeline(samples,emptyList()).none { it is WeatherTimelineEntry.Sun })
     }
     @Test fun solarCrossingsMatchWebsiteInterpolationWithoutBridgingGaps() {
         val samples=sampleRoute(Route("solar",listOf(listOf(TrackPoint(31.0,119.0),TrackPoint(31.1,119.0)))),200.0)
@@ -122,5 +135,5 @@ class LiveServicesTest {
     private fun enabled() { assumeTrue("Opt-in: RIDEWEATHER_LIVE_TESTS=true",System.getProperty("rideweather.live")=="true") }
     @Test fun directOnelapPublicRoute() { enabled(); val route=PublicRoutes.load("https://www.onelap.cn/bikeroute/detail.html?id=54848&routeType=route",Coordinates.System.BD09,PublicHttp()); assertTrue(route.pointCount>2); assertTrue(route.lengthKm>1); println("LIVE_ONELAP points=${route.pointCount} km=${route.lengthKm}") }
     @Test fun directXingzhePublicRoute() { enabled(); val route=PublicRoutes.load("https://www.imxingzhe.com/routes/5701846/",Coordinates.System.WGS84,PublicHttp()); assertTrue(route.pointCount>2); assertTrue(route.segments.size>=1); println("LIVE_XINGZHE points=${route.pointCount} segments=${route.segments.size} km=${route.lengthKm}") }
-    @Test fun directWeatherBatch() { enabled(); val route=Route("live weather",listOf(listOf(TrackPoint(31.7,119.5),TrackPoint(31.8,119.6)))); val samples=sampleRoute(route,20.0); val raw=WeatherService.fetch(samples,PublicHttp()); val start=Instant.now().epochSecond+3600; val weather=WeatherService.match(raw,samples,RidePlan(start,22.0,0.0,20.0),route.lengthKm); assertEquals(samples.size,weather.size); assertTrue(weather.all { it!=null }); assertTrue(WeatherService.items(raw,samples.size).all { solarDayAt(it,start,BEIJING)?.sunrise!=null && solarDayAt(it,start,BEIJING)?.sunset!=null }); println("LIVE_WEATHER samples=${weather.size} solar=available") }
+    @Test fun directWeatherBatch() { enabled(); val route=Route("live weather",listOf(listOf(TrackPoint(31.7,119.5),TrackPoint(31.8,119.6)))); val samples=sampleRoute(route,20.0); val raw=WeatherService.fetch(samples,PublicHttp()); val start=Instant.now().epochSecond+3600; val weather=WeatherService.match(raw,samples,RidePlan(start,22.0,0.0,20.0),route.lengthKm); assertEquals(samples.size,weather.size); assertTrue(weather.all { it!=null }); assertTrue(WeatherService.items(raw,samples.size).all { it.getJSONObject("daily").getJSONArray("sunrise").length()>0 && it.getJSONObject("daily").getJSONArray("sunset").length()>0 }); println("LIVE_WEATHER samples=${weather.size} solar=available") }
 }

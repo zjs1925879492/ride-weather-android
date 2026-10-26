@@ -88,13 +88,13 @@ class NativeFlowTest {
         assertFalse(vm.state.value.status,vm.state.value.error)
         assertTrue(vm.state.value.weather.isNotEmpty())
         assertTrue(vm.state.value.weather.all { it!=null })
-        assertTrue(vm.state.value.solar.all { it?.sunrise!=null && it.sunset!=null })
         ui.onNodeWithTag("weather_map").assertExists()
-        ui.onNodeWithTag("solar_summary").performScrollTo().assertTextContains("日出",substring=true).assertTextContains("日落",substring=true)
+        ui.onNodeWithTag("solar_summary").assertDoesNotExist()
+        ui.onAllNodesWithTag("solar_event").assertCountEquals(vm.state.value.solarEvents.size)
         ui.onNodeWithTag("edit_plan").performScrollTo().performClick()
         ui.onNodeWithTag("route_map").assertExists()
         ui.onNodeWithTag("plan_speed").performScrollTo().performTextReplacement("24")
-        assertTrue(vm.state.value.weather.isEmpty()); assertTrue(vm.state.value.solar.isEmpty()); assertTrue(vm.state.value.solarEvents.isEmpty())
+        assertTrue(vm.state.value.weather.isEmpty()); assertTrue(vm.state.value.solarEvents.isEmpty())
     }
     @Test fun mapPreferencePersistsAndMigratesWithoutTouchingUserKey() {
         val context=InstrumentationRegistry.getInstrumentation().targetContext

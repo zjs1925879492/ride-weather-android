@@ -21,7 +21,7 @@ val PLAN_FORMAT:DateTimeFormatter=DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm"
 fun nowText():String=LocalDateTime.now(BEIJING).format(PLAN_FORMAT)
 data class UiState(val route:Route?=null,val km:Double=0.0,val samples:List<Sample> = emptyList(),val weather:List<Weather?> = emptyList(),
     val geoJson:String=routeGeoJson(null,emptyList(),emptyList()),val start:String=nowText(),val speed:String="22",val rest:String="30",val spacing:String="20",
-    val solar:List<SolarDay?> = emptyList(),val solarEvents:List<SolarEvent> = emptyList(),
+    val solarEvents:List<SolarEvent> = emptyList(),
     val key:String="",val mapEnabled:Boolean=false,val busy:Boolean=false,val status:String="导入一条路线，看看沿途的天气。",val error:Boolean=false,val favorites:List<Favorite> = emptyList())
 class MainViewModel(application:Application):AndroidViewModel(application) {
     private val mutable=MutableStateFlow(UiState()); val state=mutable.asStateFlow()
@@ -30,7 +30,7 @@ class MainViewModel(application:Application):AndroidViewModel(application) {
     fun plan(s:UiState=state.value):RidePlan = RidePlan(LocalDateTime.parse(s.start,PLAN_FORMAT).atZone(BEIJING).toEpochSecond(),s.speed.toDoubleOrNull() ?: error("请输入有效均速"),s.rest.toDoubleOrNull() ?: error("请输入有效休息时间"),s.spacing.toDoubleOrNull() ?: error("请输入有效采样间距"))
     fun field(name:String,value:String) { if(state.value.busy) return; mutable.update { s ->
         val changed=when(name) { "start" -> s.copy(start=value); "speed" -> s.copy(speed=value); "rest" -> s.copy(rest=value); "spacing" -> s.copy(spacing=value); else -> return@update s }
-        changed.copy(weather=emptyList(),solar=emptyList(),solarEvents=emptyList(),geoJson=routeGeoJson(s.route,s.samples,emptyList()))
+        changed.copy(weather=emptyList(),solarEvents=emptyList(),geoJson=routeGeoJson(s.route,s.samples,emptyList()))
     } }
     fun startNow()=field("start",nowText())
     fun message(value:String,error:Boolean=false) { mutable.update { it.copy(status=value,error=error) } }
@@ -47,7 +47,7 @@ class MainViewModel(application:Application):AndroidViewModel(application) {
     private fun setRoute(route:Route) {
         val spacing=state.value.spacing.toDoubleOrNull()?.takeIf { it in 1.0..200.0 } ?: 20.0
         val samples=sampleRoute(route,spacing)
-        mutable.update { it.copy(route=route,km=route.lengthKm,samples=samples,weather=emptyList(),solar=emptyList(),solarEvents=emptyList(),geoJson=routeGeoJson(route,samples,emptyList()),status="已载入 ${route.name} · ${route.pointCount} 个点",error=false) }
+        mutable.update { it.copy(route=route,km=route.lengthKm,samples=samples,weather=emptyList(),solarEvents=emptyList(),geoJson=routeGeoJson(route,samples,emptyList()),status="已载入 ${route.name} · ${route.pointCount} 个点",error=false) }
     }
     fun demo()=task("载入演示轨迹…") { setRoute(Gpx.parse(getApplication<Application>().assets.open("demo.gpx").bufferedReader().use { it.readText() })) }
     fun importFile(uri:Uri)=task("读取手机中的 GPX…") {
@@ -109,13 +109,12 @@ class MainViewModel(application:Application):AndroidViewModel(application) {
         }
         val weather=WeatherService.match(raw,samples,p,s.km)
         val forecasts=WeatherService.items(raw,samples.size)
-        val solar=samples.mapIndexed { i,sample -> solarDayAt(forecasts[i],p.arrival(sample.km,s.km),BEIJING) }
         val events=solarRouteEvents(samples,forecasts,p,s.km)
         require(weather.any { it!=null }) { "当前缓存没有覆盖这次行程，请联网更新天气" }
         val acquired=Instant.ofEpochMilli(at).atZone(BEIJING).format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))
         val label=if(stale) "联网失败，使用旧缓存" else if(cacheUsed) "使用本机缓存" else "天气已更新"
         val missing=weather.count { it==null }
-        mutable.update { it.copy(samples=samples,weather=weather,solar=solar,solarEvents=events,geoJson=routeGeoJson(route,samples,weather),status="$label · 数据获取于 $acquired（北京时间）${if(missing>0) " · $missing 个点暂无预报" else ""}",error=stale) }
+        mutable.update { it.copy(samples=samples,weather=weather,solarEvents=events,geoJson=routeGeoJson(route,samples,weather),status="$label · 数据获取于 $acquired（北京时间）${if(missing>0) " · $missing 个点暂无预报" else ""}",error=stale) }
     }
     override fun onCleared() { db.close(); super.onCleared() }
 }

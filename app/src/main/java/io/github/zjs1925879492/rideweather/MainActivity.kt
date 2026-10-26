@@ -147,17 +147,11 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                             }
                             OutlinedButton(onClick={page=0},modifier=Modifier.testTag("edit_plan")) { Text("返回路线页调整行程") }
                             if(s.weather.isEmpty()) Text(if(s.busy) "正在查询沿途天气…" else "尚无本次行程天气，请返回路线页查询。")
-                            if(s.weather.isNotEmpty()) Section("日出与日落 · 北京时间") {
-                                Text("起点预计经过日：日出 ${s.solar.firstOrNull()?.sunrise?.let(::clock) ?: "暂无数据"} · 日落 ${s.solar.firstOrNull()?.sunset?.let(::clock) ?: "暂无数据"}",modifier=Modifier.testTag("solar_summary"))
-                                Text("终点预计经过日：日出 ${s.solar.lastOrNull()?.sunrise?.let(::clock) ?: "暂无数据"} · 日落 ${s.solar.lastOrNull()?.sunset?.let(::clock) ?: "暂无数据"}")
-                                if(s.solarEvents.isEmpty()) Text("未发现行程中或起终点前后 30 分钟内的日出日落事件。")
-                                Text("按沿途采样点的天文时间估算，实际光照受天气、地形影响；无有效数据时不推算。",style=MaterialTheme.typography.bodySmall)
-                            }
                             val plan=runCatching { vm.plan(s) }.getOrNull()
-                            val events=s.solarEvents
-                            s.samples.forEachIndexed { i,sample ->
-                                events.filter { it.km<=sample.km && (i==0 || it.km>s.samples[i-1].km) }.forEach { event -> SolarEventCard(event) }
-                                WeatherCard(i,sample,s.weather.getOrNull(i),plan?.arrival(sample.km,s.km),s.solar.getOrNull(i))
+                            weatherTimeline(s.samples,s.solarEvents).forEach { entry -> when(entry) {
+                                is WeatherTimelineEntry.Sun -> SolarEventCard(entry.event)
+                                is WeatherTimelineEntry.Stop -> WeatherCard(entry.index,s.samples[entry.index],s.weather.getOrNull(entry.index),plan?.arrival(entry.km,s.km))
+                            }
                             }
                             Text("预报按最近整点匹配。路线颜色表示采样点预计经过时刻的天气，以里程中点分区，并非实际雨区边界。天气数据：Open-Meteo。",style=MaterialTheme.typography.bodySmall)
                         }
@@ -185,16 +179,17 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
 @Composable private fun SolarEventCard(event:SolarEvent) {
     val title=if(event.type=="sunrise") "☀↑ 日出" else "☀↓ 日落"
     Section("$title · ${clock(event.time)}") {
-        Text("${number(event.km)} km · ${when(event.phase) { "before" -> "出发前 30 分钟内"; "after" -> "结束后 30 分钟内"; else -> "预计骑行途中" }}")
+        Text("${number(event.km)} km · ${when(event.phase) { "before" -> "出发前 30 分钟内"; "after" -> "结束后 30 分钟内"; else -> "预计骑行途中" }}",modifier=Modifier.testTag("solar_event"))
         Text(when {
             event.type=="sunset" && event.phase=="during" -> "日落后预计仍有 ${event.remainingMinutes} 分钟行程，建议准备车灯。"
             event.type=="sunrise" && event.phase=="during" -> "日出前的路段需要照明，建议准备车灯。"
             event.type=="sunset" && event.phase=="before" -> "出发时已在日落后，建议准备车灯。"
             else -> "请为光照变化预留行程余量。"
         },style=MaterialTheme.typography.bodySmall)
+        Text("北京时间 · 按沿途天文时间估算，实际光照受天气与地形影响。",style=MaterialTheme.typography.labelSmall)
     }
 }
-@Composable private fun WeatherCard(index:Int,sample:Sample,w:Weather?,eta:Long?,solar:SolarDay?) {
+@Composable private fun WeatherCard(index:Int,sample:Sample,w:Weather?,eta:Long?) {
     val kind=weatherKind(w?.code)
     Section("${index+1}. ${number(sample.km)} km · ${eta?.let(::clock) ?: "时间待设置"}") {
         Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -211,7 +206,6 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                 Text("${if(component>=0) "迎风" else "顺风"}分量 ${number(kotlin.math.abs(component)," km/h")}")
             }
             Text("匹配预报：${clock(w.time)}",style=MaterialTheme.typography.labelSmall)
-            Text("日出 ${solar?.sunrise?.let(::clock) ?: "暂无数据"} · 日落 ${solar?.sunset?.let(::clock) ?: "暂无数据"}",style=MaterialTheme.typography.bodySmall)
         } else Text("尚未查询，或预报未覆盖此时段。",style=MaterialTheme.typography.bodySmall)
     }
 }
