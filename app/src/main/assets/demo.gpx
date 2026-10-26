@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="RideWeather demonstration" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><name>沿途演示轨迹</name><desc>合成轨迹，仅用于功能演示，不作为骑行导航。</desc><trkseg>
+    <trkpt lat="31.72" lon="119.53"><ele>12</ele></trkpt>
+    <trkpt lat="31.73" lon="119.57"><ele>15</ele></trkpt>
+    <trkpt lat="31.75" lon="119.62"><ele>17</ele></trkpt>
+    <trkpt lat="31.76" lon="119.68"><ele>14</ele></trkpt>
+    <trkpt lat="31.74" lon="119.73"><ele>11</ele></trkpt>
+    <trkpt lat="31.71" lon="119.78"><ele>10</ele></trkpt>
+    <trkpt lat="31.68" lon="119.83"><ele>13</ele></trkpt>
+  </trkseg></trk>
+</gpx>
