@@ -3,6 +3,10 @@ package io.github.zjs1925879492.rideweather.core
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.abs
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 data class Weather(val time:Long,val temp:Double?,val feels:Double?,val rain:Double?,val amount:Double?,val wind:Double?,val gust:Double?,val direction:Double?,val code:Int?)
 enum class WeatherKind(val title:String,val color:String) {
@@ -26,7 +30,7 @@ fun weatherAt(data:JSONObject,epoch:Long):Weather? {
 }
 // Sections meet at sample mileage midpoints, not actual precipitation boundaries.
 // Track segments are never connected through their gaps.
-fun routeGeoJson(route:Route?,samples:List<Sample>,weather:List<Weather?>):String {
+fun routeGeoJson(route:Route?,samples:List<Sample>,weather:List<Weather?>,solar:List<SolarEvent> = emptyList()):String {
     val features=JSONArray()
     if(route==null) return JSONObject().put("type","FeatureCollection").put("features",features).toString()
     val boundaries=samples.zipWithNext { a,b -> (a.km+b.km)/2 }
@@ -48,6 +52,33 @@ fun routeGeoJson(route:Route?,samples:List<Sample>,weather:List<Weather?>):Strin
             }
         }
     }
-    samples.forEachIndexed { index,s -> features.put(JSONObject().put("type","Feature").put("properties",JSONObject().put("kind","sample").put("index",index).put("color",weatherKind(weather.getOrNull(index)?.code).color)).put("geometry",JSONObject().put("type","Point").put("coordinates",JSONArray().put(s.point.lon).put(s.point.lat)))) }
+    fun point(p:TrackPoint,properties:JSONObject) { features.put(JSONObject().put("type","Feature").put("properties",properties).put("geometry",JSONObject().put("type","Point").put("coordinates",JSONArray().put(p.lon).put(p.lat)))) }
+    samples.forEachIndexed { index,s -> point(s.point,JSONObject().put("kind","sample").put("index",index).put("marker","mile-$index").put("label",mapMileage(s.km)).put("priority",if(index==0 || index==samples.lastIndex) 1 else 2).put("anchor",if(index==samples.lastIndex) "top-right" else if(index==0) "bottom-left" else "bottom").put("offset",JSONArray().put(0).put(if(index==samples.lastIndex) 9 else -9)).put("color",weatherKind(weather.getOrNull(index)?.code).color)) }
+    val timeFormat=DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.of("Asia/Shanghai"))
+    solar.forEachIndexed { index,event ->
+        val p=pointAtMileage(route,event.km)
+        val title=if(event.type=="sunrise") "日出" else "日落"
+        val phase=when(event.phase) { "before" -> " · 出发前"; "after" -> " · 结束后"; else -> "" }
+        point(p,JSONObject().put("kind","solar").put("marker","solar-$index").put("label","$title ${timeFormat.format(Instant.ofEpochSecond(event.time))}$phase").put("priority",0).put("anchor","bottom").put("offset",JSONArray().put(0).put(-12)).put("color",if(event.type=="sunrise") "#ae6500" else "#9d4b32"))
+    }
     return JSONObject().put("type","FeatureCollection").put("features",features).toString()
+}
+
+fun mapMileage(km:Double):String = String.format(Locale.ROOT,"%.1f",km).removeSuffix(".0")+" km"
+
+// Cumulative mileage excludes GPX segment gaps, so solar markers stay on an
+// actual track segment rather than on a straight line between separate tracks.
+fun pointAtMileage(route:Route,target:Double):TrackPoint {
+    require(target.isFinite())
+    if(target<=0) return route.segments.first { it.isNotEmpty() }.first()
+    var km=0.0
+    route.segments.forEach { segment -> segment.zipWithNext().forEach { (a,b) ->
+        val distance=haversine(a,b); val end=km+distance
+        if(distance>0 && target<=end) {
+            val f=((target-km)/distance).coerceIn(0.0,1.0)
+            return TrackPoint(a.lat+(b.lat-a.lat)*f,a.lon+(b.lon-a.lon)*f,if(a.elevation!=null && b.elevation!=null) a.elevation+(b.elevation-a.elevation)*f else null)
+        }
+        km=end
+    } }
+    return route.segments.last { it.isNotEmpty() }.last()
 }

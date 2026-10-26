@@ -114,7 +114,7 @@ class MainViewModel(application:Application):AndroidViewModel(application) {
         val acquired=Instant.ofEpochMilli(at).atZone(BEIJING).format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))
         val label=if(stale) "联网失败，使用旧缓存" else if(cacheUsed) "使用本机缓存" else "天气已更新"
         val missing=weather.count { it==null }
-        mutable.update { it.copy(samples=samples,weather=weather,solarEvents=events,geoJson=routeGeoJson(route,samples,weather),status="$label · 数据获取于 $acquired（北京时间）${if(missing>0) " · $missing 个点暂无预报" else ""}",error=stale) }
+        mutable.update { it.copy(samples=samples,weather=weather,solarEvents=events,geoJson=routeGeoJson(route,samples,weather,events),status="$label · 数据获取于 $acquired（北京时间）${if(missing>0) " · $missing 个点暂无预报" else ""}",error=stale) }
     }
     override fun onCleared() { db.close(); super.onCleared() }
 }

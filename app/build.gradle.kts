@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.zjs1925879492.rideweather"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.1.7-dev"
+        versionCode = 9
+        versionName = "0.1.8-dev"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += "arm64-v8a" }
     }

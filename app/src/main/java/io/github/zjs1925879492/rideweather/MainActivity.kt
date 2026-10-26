@@ -142,7 +142,7 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                         else {
                             Text("${s.route.name} · ${number(s.km)} km",fontWeight=FontWeight.SemiBold)
                             Card {
-                                RouteMap(s.route,s.geoJson,s.key,s.mapEnabled,s.weather.isNotEmpty(),Modifier.fillMaxWidth().height(310.dp).testTag("weather_map")) { vm.message("底图暂不可用，请检查网络及天地图 Key 授权。轨迹仍可使用。",true) }
+                                RouteMap(s.route,s.geoJson,s.key,s.mapEnabled,s.weather.isNotEmpty(),Modifier.fillMaxWidth().height(310.dp).testTag("weather_map"),annotations=true) { vm.message("底图暂不可用，请检查网络及天地图 Key 授权。轨迹仍可使用。",true) }
                                 Text(if(s.mapEnabled) "© 天地图 · 沿途天气分区" else "沿途天气分区 · 未启用在线底图",style=MaterialTheme.typography.labelSmall,modifier=Modifier.padding(12.dp))
                             }
                             OutlinedButton(onClick={page=0},modifier=Modifier.testTag("edit_plan")) { Text("返回路线页调整行程") }

@@ -26,7 +26,7 @@ import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory.*
 import org.maplibre.android.style.sources.GeoJsonSource
 
-private data class MapRender(val route:Route?,val geoJson:String,val key:String,val enabled:Boolean,val colored:Boolean)
+private data class MapRender(val route:Route?,val geoJson:String,val key:String,val enabled:Boolean,val colored:Boolean,val annotations:Boolean)
 private class MapController(context:Context,onError:()->Unit) {
     val view:MapView
     private var map:MapLibreMap?=null
@@ -34,6 +34,9 @@ private class MapController(context:Context,onError:()->Unit) {
     private var styleKey:String?=null
     private var fitted:Route?=null
     private var renderedGeoJson:String?=null
+    private val markerImages=MapMarkerImages(context)
+    private val annotationPadding=(40*context.resources.displayMetrics.density).toInt()
+    private val renderedLabels=mutableMapOf<String,String>()
     init {
         MapLibre.getInstance(context)
         // Map URLs contain the user's key. Do not emit SDK HTTP messages to logcat.
@@ -53,25 +56,41 @@ private class MapController(context:Context,onError:()->Unit) {
         if(key!=styleKey) {
             styleKey=key
             renderedGeoJson=null
-            map.setStyle(Style.Builder().fromJson(style(key,value.geoJson))) { applyData() }
+            renderedLabels.clear()
+            map.setStyle(Style.Builder().fromJson(style(key,value.geoJson))) { loaded ->
+                loaded.addImage("route-arrow",markerImages.arrow())
+                applyData()
+            }
         } else applyData()
     }
     private fun applyData() {
         val m=map ?: return; val value=render ?: return
         m.getStyle { s ->
             if(renderedGeoJson!=value.geoJson) {
+                val features=JSONObject(value.geoJson).getJSONArray("features")
+                val wanted=mutableSetOf<String>()
+                for(i in 0 until features.length()) {
+                    val properties=features.getJSONObject(i).getJSONObject("properties")
+                    if(!properties.has("marker")) continue
+                    val id=properties.getString("marker"); val label=properties.getString("label"); val solar=properties.getString("kind")=="solar"; val color=properties.getString("color")
+                    wanted.add(id)
+                    val signature="$label|$solar|$color"
+                    if(renderedLabels[id]!=signature) { s.addImage(id,markerImages.label(label,solar,color)); renderedLabels[id]=signature }
+                }
+                (renderedLabels.keys-wanted).forEach { id -> s.removeImage(id); renderedLabels.remove(id) }
                 s.getSourceAs<GeoJsonSource>("route")?.setGeoJson(value.geoJson)
                 renderedGeoJson=value.geoJson
             }
             s.getLayerAs<LineLayer>("route-line")?.setProperties(if(value.colored) lineColor(Expression.get("color")) else lineColor("#397762"))
             s.getLayerAs<CircleLayer>("samples")?.setProperties(if(value.colored) circleColor(Expression.get("color")) else circleColor("#397762"))
+            annotationLayerIds.forEach { id -> s.getLayer(id)?.setProperties(visibility(if(value.annotations) "visible" else "none")) }
             val route=value.route
             if(route!=null && fitted !== route) {
                 fitted=route
                 val points=route.segments.flatten()
                 val minLat=points.minOf { it.lat }; val maxLat=points.maxOf { it.lat }; val minLon=points.minOf { it.lon }; val maxLon=points.maxOf { it.lon }
                 if(maxLat-minLat<0.00001 && maxLon-minLon<0.00001) m.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(minLat,minLon),13.0))
-                else m.moveCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().include(LatLng(minLat,minLon)).include(LatLng(maxLat,maxLon)).build(),55))
+                else m.moveCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().include(LatLng(minLat,minLon)).include(LatLng(maxLat,maxLon)).build(),if(value.annotations) annotationPadding else 55))
             }
         }
     }
@@ -90,11 +109,12 @@ private class MapController(context:Context,onError:()->Unit) {
         layers.put(JSONObject().put("id","route-outline").put("type","line").put("source","route").put("filter",lineFilter).put("layout",JSONObject().put("line-cap","round").put("line-join","round")).put("paint",JSONObject().put("line-color","#354b40").put("line-width",7)))
         layers.put(JSONObject().put("id","route-line").put("type","line").put("source","route").put("filter",lineFilter).put("layout",JSONObject().put("line-cap","round").put("line-join","round")).put("paint",JSONObject().put("line-color","#397762").put("line-width",4)))
         layers.put(JSONObject().put("id","samples").put("type","circle").put("source","route").put("filter",JSONArray("[\"==\",[\"get\",\"kind\"],\"sample\"]")).put("paint",JSONObject().put("circle-radius",5).put("circle-color","#397762").put("circle-stroke-color","#354b40").put("circle-stroke-width",2)))
+        mapAnnotationLayers().forEach { layers.put(it) }
         return JSONObject().put("version",8).put("sources",sources).put("layers",layers).toString()
     }
 }
 @Composable
-fun RouteMap(route:Route?,geoJson:String,key:String,enabled:Boolean,colored:Boolean,modifier:Modifier=Modifier,onError:()->Unit) {
+fun RouteMap(route:Route?,geoJson:String,key:String,enabled:Boolean,colored:Boolean,modifier:Modifier=Modifier,annotations:Boolean=false,onError:()->Unit) {
     val context=LocalContext.current
     val lifecycle=LocalLifecycleOwner.current.lifecycle
     val error by rememberUpdatedState(onError)
@@ -112,5 +132,5 @@ fun RouteMap(route:Route?,geoJson:String,key:String,enabled:Boolean,colored:Bool
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer); controller.view.onPause(); controller.view.onStop(); controller.view.onDestroy() }
     }
-    AndroidView(factory={controller.view},modifier=modifier,update={controller.update(MapRender(route,geoJson,key,enabled,colored))})
+    AndroidView(factory={controller.view},modifier=modifier,update={controller.update(MapRender(route,geoJson,key,enabled,colored,annotations))})
 }
