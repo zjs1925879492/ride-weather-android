@@ -30,6 +30,8 @@
 
 测试会安装开发 APK 与测试 APK，使用 Compose 语义节点执行操作和断言，无需逐帧识图。包含真实第三方请求，服务变化或断网会使相关用例失败；天气查询可能命中应用缓存。收藏用例只清理本次新增的演示收藏。
 
+该 Gradle 流程可能在结束时卸载被测应用，建议使用专用测试设备。需要保留日常使用设备的 Key 和收藏时，先构建两个 APK，再用 `adb install -r` 覆盖安装，执行 `adb shell am instrument -w io.github.zjs1925879492.rideweather.test/androidx.test.runner.AndroidJUnitRunner`，不要卸载被测应用或清除其数据。地图持久化用例使用单独测试偏好文件，不替换用户 Key。
+
 报告在编译输出根目录的 app/reports/androidTests/connected；JVM 报告在 app/reports/tests/testDebugUnitTest。UI 使用稳定 testTag 并向 UiAutomator 暴露资源标识。系统文件选择器、分享入口等跨应用流程可后续使用 UiAutomator；地图绘制与视觉布局仍需截图验收。
 
 ## Skills / MCP

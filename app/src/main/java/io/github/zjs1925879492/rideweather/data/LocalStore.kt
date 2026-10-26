@@ -16,8 +16,12 @@ import javax.crypto.spec.GCMParameterSpec
 import java.io.File
 import java.util.UUID
 
-class MapKeyStore(context:Context) {
-    private val prefs=context.getSharedPreferences("map_credentials",Context.MODE_PRIVATE)
+class MapKeyStore(context:Context,preferencesName:String="map_credentials") {
+    private val prefs=context.getSharedPreferences(preferencesName,Context.MODE_PRIVATE)
+    // Previously saved keys were only written after a successful tile probe.
+    // Migrate those installations to enabled unless the user explicitly turns it off.
+    fun enabled(key:String):Boolean = key.isNotBlank() && prefs.getBoolean("enabled",true)
+    fun setEnabled(enabled:Boolean) { check(prefs.edit().putBoolean("enabled",enabled).commit()) { "底图设置保存失败" } }
     private fun secret():SecretKey {
         val store=KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey("rideweather-map-key",null) as? SecretKey)?.let { return it }
@@ -34,7 +38,7 @@ class MapKeyStore(context:Context) {
     fun save(key:String) {
         if(key.isEmpty()) { check(prefs.edit().clear().commit()) { "无法删除地图 Key" }; return }
         val cipher=Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE,secret()) }
-        check(prefs.edit().putString("iv",Base64.encodeToString(cipher.iv,Base64.NO_WRAP)).putString("encrypted",Base64.encodeToString(cipher.doFinal(key.toByteArray()),Base64.NO_WRAP)).commit()) { "地图 Key 保存失败" }
+        check(prefs.edit().putBoolean("enabled",true).putString("iv",Base64.encodeToString(cipher.iv,Base64.NO_WRAP)).putString("encrypted",Base64.encodeToString(cipher.doFinal(key.toByteArray()),Base64.NO_WRAP)).commit()) { "地图 Key 保存失败" }
     }
 }
 data class Favorite(val id:String,val name:String,val km:Double,val points:Int,val speed:String,val rest:String,val spacing:String)

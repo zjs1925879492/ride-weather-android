@@ -112,13 +112,18 @@ object WeatherService {
             .addQueryParameter("latitude",samples.joinToString(",") { it.point.lat.toString() })
             .addQueryParameter("longitude",samples.joinToString(",") { it.point.lon.toString() })
             .addQueryParameter("hourly","temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m")
+            .addQueryParameter("daily","sunrise,sunset")
             .addQueryParameter("forecast_days","16").addQueryParameter("timezone","UTC").addQueryParameter("timeformat","unixtime").addQueryParameter("wind_speed_unit","kmh").build()
         return http.bytes(url.toString(),8*1024*1024).toString(Charsets.UTF_8)
     }
     fun match(raw:String,samples:List<Sample>,plan:RidePlan,totalKm:Double):List<Weather?> {
+        val items=items(raw,samples.size)
+        return samples.mapIndexed { i,s -> weatherAt(items[i],plan.arrival(s.km,totalKm)) }
+    }
+    fun items(raw:String,count:Int):List<JSONObject> {
         val items=if(raw.trim().startsWith("[")) JSONArray(raw) else JSONArray().put(JSONObject(raw))
-        require(items.length()==samples.size) { "天气数据未覆盖全部采样点" }
-        return samples.mapIndexed { i,s -> weatherAt(items.getJSONObject(i),plan.arrival(s.km,totalKm)) }
+        require(items.length()==count) { "天气数据未覆盖全部采样点" }
+        return (0 until items.length()).map { items.getJSONObject(it) }
     }
 }
 fun tiandituTile(key:String,point:TrackPoint):String {

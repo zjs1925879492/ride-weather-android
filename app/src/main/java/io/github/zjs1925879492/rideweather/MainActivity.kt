@@ -92,11 +92,12 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
             Surface(color=if(s.error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,modifier=Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=4.dp),shape=MaterialTheme.shapes.medium) {
                 Text(s.status,style=MaterialTheme.typography.bodySmall,modifier=Modifier.padding(12.dp).testTag("status"))
             }
+            key(page) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                 when(page) {
                     0 -> {
                         Card {
-                            RouteMap(s.route,s.geoJson,s.key,s.mapEnabled,s.weather.isNotEmpty(),Modifier.fillMaxWidth().height(310.dp)) { vm.message("底图暂不可用，请检查网络及天地图 Key 授权。轨迹仍可使用。",true) }
+                            RouteMap(s.route,s.geoJson,s.key,s.mapEnabled,false,Modifier.fillMaxWidth().height(310.dp).testTag("route_map")) { vm.message("底图暂不可用，请检查网络及天地图 Key 授权。轨迹仍可使用。",true) }
                             Text(if(s.mapEnabled) "© 天地图 · 国家地理信息公共服务平台" else "未启用在线底图 · 可在设置中填写自己的天地图 Key",style=MaterialTheme.typography.labelSmall,modifier=Modifier.padding(12.dp))
                         }
                         s.route?.let { route ->
@@ -107,7 +108,6 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                                     OutlinedButton(onClick=vm::saveFavorite,enabled=!s.busy,modifier=Modifier.testTag("save_favorite")) { Text("收藏到本机") }
                                     OutlinedButton(onClick={ export.launch(route.name.replace(Regex("[\\\\/:*?\"<>|]"),"_").take(80)+".gpx") },enabled=!s.busy) { Text("导出 GPX") }
                                 }
-                                Button(onClick={page=1},modifier=Modifier.fillMaxWidth()) { Text("设置行程与天气") }
                             }
                         }
                         Section("带上你的路线") {
@@ -125,24 +125,40 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                             Button(onClick={vm.importShare(link,Coordinates.System.valueOf(system))},enabled=!s.busy && link.isNotBlank(),modifier=Modifier.fillMaxWidth().testTag("import_share")) { Text("直接导入公开路线") }
                             Text("路线在手机中解析。演示轨迹为合成数据，不用于实际骑行导航。",style=MaterialTheme.typography.bodySmall)
                         }
-                    }
-                    1 -> {
                         Section("安排这次出发") {
-                            OutlinedTextField(s.start,{vm.field("start",it)},label={Text("出发时间 · 北京时间")},supportingText={Text("格式：2026-10-26 08:00")},modifier=Modifier.fillMaxWidth(),singleLine=true,enabled=!s.busy)
+                            OutlinedTextField(s.start,{vm.field("start",it)},label={Text("出发时间 · 北京时间")},supportingText={Text("格式：2026-10-26 08:00")},modifier=Modifier.fillMaxWidth().testTag("plan_start"),singleLine=true,enabled=!s.busy)
                             TextButton(onClick=vm::startNow,enabled=!s.busy) { Text("使用现在的时间") }
                             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                                PlanField("均速 km/h",s.speed,{vm.field("speed",it)},Modifier.weight(1f),!s.busy)
-                                PlanField("休息 min",s.rest,{vm.field("rest",it)},Modifier.weight(1f),!s.busy)
+                                PlanField("均速 km/h",s.speed,{vm.field("speed",it)},Modifier.weight(1f).testTag("plan_speed"),!s.busy)
+                                PlanField("休息 min",s.rest,{vm.field("rest",it)},Modifier.weight(1f).testTag("plan_rest"),!s.busy)
                                 PlanField("间距 km",s.spacing,{vm.field("spacing",it)},Modifier.weight(1f),!s.busy)
                             }
                             Text("按恒定均速估算，休息时间沿里程均摊；最多查询 18 个采样点。",style=MaterialTheme.typography.bodySmall)
-                            Button(onClick=vm::queryWeather,enabled=s.route!=null && !s.busy,modifier=Modifier.fillMaxWidth().testTag("query_weather")) { Text("查询沿途天气") }
+                            Button(onClick={vm.queryWeather();page=1},enabled=s.route!=null && !s.busy,modifier=Modifier.fillMaxWidth().testTag("query_weather")) { Text("查询沿途天气并查看") }
                         }
+                    }
+                    1 -> {
                         if(s.route==null) Text("请先在路线页导入 GPX，或载入演示轨迹。")
                         else {
                             Text("${s.route.name} · ${number(s.km)} km",fontWeight=FontWeight.SemiBold)
+                            Card {
+                                RouteMap(s.route,s.geoJson,s.key,s.mapEnabled,s.weather.isNotEmpty(),Modifier.fillMaxWidth().height(310.dp).testTag("weather_map")) { vm.message("底图暂不可用，请检查网络及天地图 Key 授权。轨迹仍可使用。",true) }
+                                Text(if(s.mapEnabled) "© 天地图 · 沿途天气分区" else "沿途天气分区 · 未启用在线底图",style=MaterialTheme.typography.labelSmall,modifier=Modifier.padding(12.dp))
+                            }
+                            OutlinedButton(onClick={page=0},modifier=Modifier.testTag("edit_plan")) { Text("返回路线页调整行程") }
+                            if(s.weather.isEmpty()) Text(if(s.busy) "正在查询沿途天气…" else "尚无本次行程天气，请返回路线页查询。")
+                            if(s.weather.isNotEmpty()) Section("日出与日落 · 北京时间") {
+                                Text("起点预计经过日：日出 ${s.solar.firstOrNull()?.sunrise?.let(::clock) ?: "暂无数据"} · 日落 ${s.solar.firstOrNull()?.sunset?.let(::clock) ?: "暂无数据"}",modifier=Modifier.testTag("solar_summary"))
+                                Text("终点预计经过日：日出 ${s.solar.lastOrNull()?.sunrise?.let(::clock) ?: "暂无数据"} · 日落 ${s.solar.lastOrNull()?.sunset?.let(::clock) ?: "暂无数据"}")
+                                if(s.solarEvents.isEmpty()) Text("未发现行程中或起终点前后 30 分钟内的日出日落事件。")
+                                Text("按沿途采样点的天文时间估算，实际光照受天气、地形影响；无有效数据时不推算。",style=MaterialTheme.typography.bodySmall)
+                            }
                             val plan=runCatching { vm.plan(s) }.getOrNull()
-                            s.samples.forEachIndexed { i,sample -> WeatherCard(i,sample,s.weather.getOrNull(i),plan?.arrival(sample.km,s.km)) }
+                            val events=s.solarEvents
+                            s.samples.forEachIndexed { i,sample ->
+                                events.filter { it.km<=sample.km && (i==0 || it.km>s.samples[i-1].km) }.forEach { event -> SolarEventCard(event) }
+                                WeatherCard(i,sample,s.weather.getOrNull(i),plan?.arrival(sample.km,s.km),s.solar.getOrNull(i))
+                            }
                             Text("预报按最近整点匹配。路线颜色表示采样点预计经过时刻的天气，以里程中点分区，并非实际雨区边界。天气数据：Open-Meteo。",style=MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -156,6 +172,7 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                 }
                 Spacer(Modifier.height(8.dp))
             }
+            }
         }
     }
 }
@@ -165,7 +182,19 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
 @Composable private fun PlanField(label:String,value:String,onChange:(String)->Unit,modifier:Modifier,enabled:Boolean) {
     OutlinedTextField(value,onChange,label={Text(label,fontSize=11.sp)},singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),modifier=modifier,enabled=enabled)
 }
-@Composable private fun WeatherCard(index:Int,sample:Sample,w:Weather?,eta:Long?) {
+@Composable private fun SolarEventCard(event:SolarEvent) {
+    val title=if(event.type=="sunrise") "☀↑ 日出" else "☀↓ 日落"
+    Section("$title · ${clock(event.time)}") {
+        Text("${number(event.km)} km · ${when(event.phase) { "before" -> "出发前 30 分钟内"; "after" -> "结束后 30 分钟内"; else -> "预计骑行途中" }}")
+        Text(when {
+            event.type=="sunset" && event.phase=="during" -> "日落后预计仍有 ${event.remainingMinutes} 分钟行程，建议准备车灯。"
+            event.type=="sunrise" && event.phase=="during" -> "日出前的路段需要照明，建议准备车灯。"
+            event.type=="sunset" && event.phase=="before" -> "出发时已在日落后，建议准备车灯。"
+            else -> "请为光照变化预留行程余量。"
+        },style=MaterialTheme.typography.bodySmall)
+    }
+}
+@Composable private fun WeatherCard(index:Int,sample:Sample,w:Weather?,eta:Long?,solar:SolarDay?) {
     val kind=weatherKind(w?.code)
     Section("${index+1}. ${number(sample.km)} km · ${eta?.let(::clock) ?: "时间待设置"}") {
         Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -182,6 +211,7 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                 Text("${if(component>=0) "迎风" else "顺风"}分量 ${number(kotlin.math.abs(component)," km/h")}")
             }
             Text("匹配预报：${clock(w.time)}",style=MaterialTheme.typography.labelSmall)
+            Text("日出 ${solar?.sunrise?.let(::clock) ?: "暂无数据"} · 日落 ${solar?.sunset?.let(::clock) ?: "暂无数据"}",style=MaterialTheme.typography.bodySmall)
         } else Text("尚未查询，或预报未覆盖此时段。",style=MaterialTheme.typography.bodySmall)
     }
 }
@@ -217,7 +247,8 @@ private fun signingIdentity(context:Context):String {
             TextButton(onClick={vm.disableMap(true);key=""},enabled=!s.busy) { Text("删除本机 Key") }
         }
         Text("当前通过天地图 WMTS 瓦片服务加载矢量底图与中文注记。适用 Key 类型和权限以天地图控制台为准；这不是天地图官方 Android SDK 的签名鉴权。",style=MaterialTheme.typography.bodySmall)
-        Text("Key 使用 Android Keystore 加密后保存在手机中。只有启用底图时才向天地图发送请求。",style=MaterialTheme.typography.bodySmall)
+        Text(if(s.mapEnabled) "底图已启用，下次启动自动恢复。" else "底图已关闭。",modifier=Modifier.testTag("map_enabled_status"))
+        Text("Key 使用 Android Keystore 加密后保存在手机中，启用状态一并保存。只有启用底图时才向天地图发送请求。",style=MaterialTheme.typography.bodySmall)
     }
     Section("应用身份") {
         Text(identity,style=MaterialTheme.typography.bodySmall,modifier=Modifier.testTag("signing_identity"))
