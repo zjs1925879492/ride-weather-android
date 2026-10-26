@@ -2,6 +2,15 @@ package io.github.zjs1925879492.rideweather
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import io.github.zjs1925879492.rideweather.core.Sample
+import io.github.zjs1925879492.rideweather.core.TrackPoint
+import io.github.zjs1925879492.rideweather.core.Weather
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -20,6 +29,21 @@ class NativeFlowTest {
     @get:Rule val ui=createAndroidComposeRule<MainActivity>()
     private lateinit var vm:MainViewModel
     @Before fun findModel() { ui.runOnIdle { vm=ViewModelProvider(ui.activity)[MainViewModel::class.java] } }
+    @Test fun compactWeatherCardSeparatesMileageAndTimeWithoutCoordinates() {
+        ui.runOnIdle { ui.activity.setContent {
+            MaterialTheme { Box(Modifier.width(300.dp)) {
+                WeatherCard(Sample(TrackPoint(31.76543,119.12345),60.3,0,90.0),Weather(1792996800,23.2,22.6,0.0,0.0,10.4,20.9,45.0,0),1792996800)
+            } }
+        } }
+        ui.onNodeWithTag("weather_mileage").assertTextEquals("60.3 km")
+        val mileage=ui.onNodeWithTag("weather_mileage").fetchSemanticsNode().boundsInRoot
+        val eta=ui.onNodeWithTag("weather_eta").fetchSemanticsNode().boundsInRoot
+        assertTrue(mileage.right<=eta.left)
+        ui.onNodeWithText("31.76543",substring=true).assertDoesNotExist()
+        ui.onNodeWithText("匹配预报",substring=true).assertDoesNotExist()
+        ui.onNodeWithText("降雨概率").assertIsDisplayed()
+        ui.onNodeWithText("阵风").assertIsDisplayed()
+    }
     private fun settled() { ui.waitUntil(45_000) { !vm.state.value.busy }; ui.waitForIdle() }
     private fun demo() {
         ui.onNodeWithTag("load_demo").performScrollTo().performClick(); settled()

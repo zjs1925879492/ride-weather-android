@@ -23,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.ClipEntry
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -150,7 +152,7 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                             val plan=runCatching { vm.plan(s) }.getOrNull()
                             weatherTimeline(s.samples,s.solarEvents).forEach { entry -> when(entry) {
                                 is WeatherTimelineEntry.Sun -> SolarEventCard(entry.event)
-                                is WeatherTimelineEntry.Stop -> WeatherCard(entry.index,s.samples[entry.index],s.weather.getOrNull(entry.index),plan?.arrival(entry.km,s.km))
+                                is WeatherTimelineEntry.Stop -> WeatherCard(s.samples[entry.index],s.weather.getOrNull(entry.index),plan?.arrival(entry.km,s.km))
                             }
                             }
                             Text("预报按最近整点匹配。路线颜色表示采样点预计经过时刻的天气，以里程中点分区，并非实际雨区边界。天气数据：Open-Meteo。",style=MaterialTheme.typography.bodySmall)
@@ -189,24 +191,40 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
         Text("北京时间 · 按沿途天文时间估算，实际光照受天气与地形影响。",style=MaterialTheme.typography.labelSmall)
     }
 }
-@Composable private fun WeatherCard(index:Int,sample:Sample,w:Weather?,eta:Long?) {
+@Composable private fun WeatherMetric(label:String,value:String,modifier:Modifier=Modifier) {
+    Row(modifier,horizontalArrangement=Arrangement.spacedBy(5.dp),verticalAlignment=Alignment.CenterVertically) {
+        Text(label,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,softWrap=false)
+        Text(value,style=MaterialTheme.typography.bodySmall,fontWeight=FontWeight.Medium,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis,modifier=Modifier.weight(1f))
+    }
+}
+@Composable internal fun WeatherCard(sample:Sample,w:Weather?,eta:Long?) {
     val kind=weatherKind(w?.code)
-    Section("${index+1}. ${number(sample.km)} km · ${eta?.let(::clock) ?: "时间待设置"}") {
-        Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(14.dp).background(Color(android.graphics.Color.parseColor(kind.color))))
-            Text(kind.title,fontWeight=FontWeight.SemiBold)
-            Text(number(w?.temp," °C"),fontWeight=FontWeight.Bold)
-        }
-        Text(String.format(Locale.US,"%.5f, %.5f",sample.point.lat,sample.point.lon),style=MaterialTheme.typography.labelSmall)
-        if(w!=null) {
-            Text("体感 ${number(w.feels," °C")}  ·  降雨概率 ${number(w.rain,"%")}  ·  降水 ${number(w.amount," mm")}")
-            Text("风速 ${number(w.wind," km/h")}  ·  阵风 ${number(w.gust," km/h")}")
-            if(w.wind!=null && w.direction!=null) {
-                val component=headwind(w.wind,w.direction,sample.heading)
-                Text("${if(component>=0) "迎风" else "顺风"}分量 ${number(kotlin.math.abs(component)," km/h")}")
+    Card(Modifier.fillMaxWidth().testTag("weather_card")) {
+        Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("${number(sample.km)} km",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,maxLines=1,softWrap=false,modifier=Modifier.weight(1f).testTag("weather_mileage"))
+                Text(eta?.let(::clock) ?: "时间待设置",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,softWrap=false,modifier=Modifier.testTag("weather_eta"))
             }
-            Text("匹配预报：${clock(w.time)}",style=MaterialTheme.typography.labelSmall)
-        } else Text("尚未查询，或预报未覆盖此时段。",style=MaterialTheme.typography.bodySmall)
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(10.dp).background(Color(android.graphics.Color.parseColor(kind.color))))
+                Text("${kind.title}  ${number(w?.temp," °C")}",fontWeight=FontWeight.SemiBold,style=MaterialTheme.typography.bodyMedium,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis,modifier=Modifier.weight(1f))
+                Text("体感 ${number(w?.feels," °C")}",style=MaterialTheme.typography.bodySmall,maxLines=1,softWrap=false)
+            }
+            if(w!=null) {
+                Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                    WeatherMetric("降雨概率",number(w.rain,"%"),Modifier.weight(1f))
+                    WeatherMetric("降水",number(w.amount," mm"),Modifier.weight(1f))
+                }
+                Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                    WeatherMetric("风速",number(w.wind," km/h"),Modifier.weight(1f))
+                    WeatherMetric("阵风",number(w.gust," km/h"),Modifier.weight(1f))
+                }
+                if(w.wind!=null && w.direction!=null) {
+                    val component=headwind(w.wind,w.direction,sample.heading)
+                    WeatherMetric(if(component>=0) "迎风分量" else "顺风分量",number(kotlin.math.abs(component)," km/h"))
+                }
+            } else Text("尚未查询，或预报未覆盖此时段。",style=MaterialTheme.typography.bodySmall)
+        }
     }
 }
 @Composable private fun FavoriteCard(favorite:Favorite,busy:Boolean,onLoad:()->Unit,onDelete:()->Unit) {

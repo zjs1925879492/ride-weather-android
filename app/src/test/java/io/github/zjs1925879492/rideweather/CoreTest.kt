@@ -10,6 +10,21 @@ import org.junit.Test
 import java.time.Instant
 
 class CoreTest {
+    @Test fun screenshotRideHasOneSunsetBetweenFortyAndSixtyKilometres() {
+        val mileage=listOf(0.0,20.18118075825846,40.237318995236066,60.28410589461554,80.4236398957285,100.78259556666896,102.45378077228679)
+        val samples=mileage.mapIndexed { i,km -> Sample(TrackPoint(31.0,119.0),km,if(i<3) 0 else 1,0.0) }
+        // Public-route regression reproduced from the reported afternoon trip.
+        val sunset=1793006203L
+        val forecasts=List(samples.size) { JSONObject().put("daily",JSONObject().put("time",JSONArray().put(1792972800L)).put("sunset",JSONArray().put(sunset))) }
+        val plan=RidePlan(java.time.LocalDateTime.parse("2026-10-26 14:44",PLAN_FORMAT).atZone(BEIJING).toEpochSecond(),22.0,30.0,20.0)
+        val events=solarRouteEvents(samples,forecasts,plan,mileage.last())
+        assertEquals(1,events.size); assertEquals("sunset",events.single().type)
+        assertEquals(sunset,events.single().time); assertTrue(events.single().km in 40.24..60.28)
+        val timeline=weatherTimeline(samples,events)
+        val index=timeline.indexOfFirst { it is WeatherTimelineEntry.Sun }
+        assertEquals(2,(timeline[index-1] as WeatherTimelineEntry.Stop).index)
+        assertEquals(3,(timeline[index+1] as WeatherTimelineEntry.Stop).index)
+    }
     @Test fun solarEventsMatchWebsiteGoldenAndDaytimeRideHasNoReminder() {
         val samples=listOf(0.0,20.0,40.0).map { Sample(TrackPoint(31.0,119.0),it,0,0.0) }
         val forecasts=(0..2).map { i -> JSONObject().put("daily",JSONObject().put("time",JSONArray().put(86400)).put("sunrise",JSONArray().put(100900+i*100)).put("sunset",JSONArray().put(106000+i*100))) }
@@ -33,7 +48,7 @@ class CoreTest {
         assertEquals(3,weatherTimeline(samples,emptyList()).size)
         assertTrue(weatherTimeline(samples,emptyList()).none { it is WeatherTimelineEntry.Sun })
     }
-    @Test fun solarCrossingsMatchWebsiteInterpolationWithoutBridgingGaps() {
+    @Test fun solarCrossingsUseConsecutiveSamplesAcrossTrackSegmentsButNotMissingForecasts() {
         val samples=sampleRoute(Route("solar",listOf(listOf(TrackPoint(31.0,119.0),TrackPoint(31.1,119.0)))),200.0)
         val total=samples.last().km; val plan=RidePlan(100000,22.0,0.0,20.0); val end=plan.arrival(total,total)
         val a=100600L; val b=end-600
@@ -42,7 +57,7 @@ class CoreTest {
         val event=solarRouteEvents(samples,forecasts,plan,total).single()
         assertEquals("sunrise",event.type); assertEquals("during",event.phase)
         assertEquals(total/2,event.km,1e-9); assertEquals((plan.start+end)/2.0,event.time.toDouble(),1.0)
-        assertTrue(solarRouteEvents(samples.mapIndexed { i,s -> s.copy(segment=i) },forecasts,plan,total).isEmpty())
+        assertEquals(event,solarRouteEvents(samples.mapIndexed { i,s -> s.copy(segment=i) },forecasts,plan,total).single())
         assertTrue(solarRouteEvents(samples,listOf(forecast(a),JSONObject()),plan,total).isEmpty())
         assertEquals("before",solarRouteEvents(samples,List(2){forecast(plan.start-900)},plan,total).single().phase)
         assertEquals("after",solarRouteEvents(samples,List(2){forecast(end+900)},plan,total).single().phase)
@@ -133,6 +148,22 @@ class CoreTest {
 private object LocalDateTimeForTest { fun parse(value:String)=java.time.LocalDateTime.parse(value,PLAN_FORMAT) }
 class LiveServicesTest {
     private fun enabled() { assumeTrue("Opt-in: RIDEWEATHER_LIVE_TESTS=true",System.getProperty("rideweather.live")=="true") }
+    @Test fun publicXingzheAfternoonRideIncludesSunset() {
+        enabled()
+        val route=PublicRoutes.load("https://www.imxingzhe.com/routes/5701846/",Coordinates.System.WGS84,PublicHttp())
+        val samples=sampleRoute(route,20.0)
+        val forecasts=WeatherService.items(WeatherService.fetch(samples,PublicHttp()),samples.size)
+        // Center the trip on an upcoming actual sunset so this live regression
+        // remains usable after the original 2026-10-26 screenshot's forecast expires.
+        val sunsets=forecasts.first().getJSONObject("daily").getJSONArray("sunset")
+        val sunset=(0 until sunsets.length()).map { sunsets.getLong(it) }.first { it>Instant.now().epochSecond+86400 }
+        val offset=RidePlan(0,22.0,30.0,20.0).arrival(50.0,route.lengthKm)
+        val plan=RidePlan(sunset-offset,22.0,30.0,20.0)
+        val events=solarRouteEvents(samples,forecasts,plan,route.lengthKm)
+        println("SUNSET_REGRESSION events=$events")
+        assertEquals(1,events.count { it.type=="sunset" && it.phase=="during" })
+        assertTrue(events.single { it.type=="sunset" }.km in 40.0..60.3)
+    }
     @Test fun directOnelapPublicRoute() { enabled(); val route=PublicRoutes.load("https://www.onelap.cn/bikeroute/detail.html?id=54848&routeType=route",Coordinates.System.BD09,PublicHttp()); assertTrue(route.pointCount>2); assertTrue(route.lengthKm>1); println("LIVE_ONELAP points=${route.pointCount} km=${route.lengthKm}") }
     @Test fun directXingzhePublicRoute() { enabled(); val route=PublicRoutes.load("https://www.imxingzhe.com/routes/5701846/",Coordinates.System.WGS84,PublicHttp()); assertTrue(route.pointCount>2); assertTrue(route.segments.size>=1); println("LIVE_XINGZHE points=${route.pointCount} segments=${route.segments.size} km=${route.lengthKm}") }
     @Test fun directWeatherBatch() { enabled(); val route=Route("live weather",listOf(listOf(TrackPoint(31.7,119.5),TrackPoint(31.8,119.6)))); val samples=sampleRoute(route,20.0); val raw=WeatherService.fetch(samples,PublicHttp()); val start=Instant.now().epochSecond+3600; val weather=WeatherService.match(raw,samples,RidePlan(start,22.0,0.0,20.0),route.lengthKm); assertEquals(samples.size,weather.size); assertTrue(weather.all { it!=null }); assertTrue(WeatherService.items(raw,samples.size).all { it.getJSONObject("daily").getJSONArray("sunrise").length()>0 && it.getJSONObject("daily").getJSONArray("sunset").length()>0 }); println("LIVE_WEATHER samples=${weather.size} solar=available") }

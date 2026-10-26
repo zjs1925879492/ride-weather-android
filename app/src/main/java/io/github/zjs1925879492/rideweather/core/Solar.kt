@@ -17,8 +17,9 @@ fun weatherTimeline(samples:List<Sample>,events:List<SolarEvent>):List<WeatherTi
     (samples.mapIndexed { i,s -> WeatherTimelineEntry.Stop(i,s.km) }+events.map { WeatherTimelineEntry.Sun(it) })
         .sortedWith(compareBy<WeatherTimelineEntry> { it.km }.thenBy { if(it is WeatherTimelineEntry.Sun) { if(it.event.phase=="before") -1 else 1 } else 0 })
 
-// Same ETA/solar crossing interpolation as the website; never bridge track gaps
-// or a missing forecast sample. Also include events within 30 minutes of the ride.
+// Same ETA/solar crossing interpolation as the website. Consecutive forecast
+// samples can belong to different track segments: this solves time/mileage,
+// not a straight map line across the gap. Never bridge missing forecast samples.
 fun solarRouteEvents(samples:List<Sample>,forecasts:List<JSONObject>,plan:RidePlan,totalKm:Double,nearSeconds:Long=1800):List<SolarEvent> {
     if(samples.isEmpty() || totalKm<=0) return emptyList()
     data class Node(val type:String,val time:Long,val km:Double,val index:Int,val eta:Long)
@@ -41,7 +42,7 @@ fun solarRouteEvents(samples:List<Sample>,forecasts:List<JSONObject>,plan:RidePl
         for((i,a) in nodes.withIndex()) {
             if(a.eta==a.time) { event=event(a,a.time,a.km,"during"); break }
             val b=nodes.getOrNull(i+1) ?: continue
-            if(b.index!=a.index+1 || b.km<=a.km || samples[a.index].segment!=samples[b.index].segment) continue
+            if(b.index!=a.index+1 || b.km<=a.km) continue
             val da=a.eta-a.time; val db=b.eta-b.time
             if(da<0 && db>=0) {
                 val fraction=-da.toDouble()/(db-da)
