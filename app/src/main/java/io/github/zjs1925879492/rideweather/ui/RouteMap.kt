@@ -1,6 +1,7 @@
 package io.github.zjs1925879492.rideweather.ui
 
 import android.content.Context
+import android.view.ViewGroup
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,8 +28,9 @@ import org.maplibre.android.style.layers.PropertyFactory.*
 import org.maplibre.android.style.sources.GeoJsonSource
 
 private data class MapRender(val route:Route?,val geoJson:String,val key:String,val enabled:Boolean,val colored:Boolean,val annotations:Boolean)
-private class MapController(context:Context,onError:()->Unit) {
+private class MapController(context:Context,onError:()->Unit,onGestureActive:(Boolean)->Unit) {
     val view:MapView
+    val container:MapTouchContainer
     private var map:MapLibreMap?=null
     private var render:MapRender?=null
     private var styleKey:String?=null
@@ -42,6 +44,7 @@ private class MapController(context:Context,onError:()->Unit) {
         // Map URLs contain the user's key. Do not emit SDK HTTP messages to logcat.
         Logger.setVerbosity(Logger.NONE)
         view=MapView(context).apply { onCreate(null); addOnDidFailLoadingMapListener { onError() } }
+        container=MapTouchContainer(context,onGestureActive).apply { addView(view,ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT)) }
         view.getMapAsync { m ->
             map=m
             m.cameraPosition=CameraPosition.Builder().target(LatLng(31.74,119.6)).zoom(8.0).build()
@@ -114,23 +117,24 @@ private class MapController(context:Context,onError:()->Unit) {
     }
 }
 @Composable
-fun RouteMap(route:Route?,geoJson:String,key:String,enabled:Boolean,colored:Boolean,modifier:Modifier=Modifier,annotations:Boolean=false,onError:()->Unit) {
+fun RouteMap(route:Route?,geoJson:String,key:String,enabled:Boolean,colored:Boolean,modifier:Modifier=Modifier,annotations:Boolean=false,onGestureActive:(Boolean)->Unit={},onError:()->Unit) {
     val context=LocalContext.current
     val lifecycle=LocalLifecycleOwner.current.lifecycle
     val error by rememberUpdatedState(onError)
-    val controller=remember(context) { MapController(context) { error() } }
+    val gesture by rememberUpdatedState(onGestureActive)
+    val controller=remember(context) { MapController(context,{ error() },{ gesture(it) }) }
     DisposableEffect(controller,lifecycle) {
         if(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) controller.view.onStart()
         if(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) controller.view.onResume()
         val observer=LifecycleEventObserver { _,event -> when(event) {
             Lifecycle.Event.ON_START -> controller.view.onStart()
             Lifecycle.Event.ON_RESUME -> controller.view.onResume()
-            Lifecycle.Event.ON_PAUSE -> controller.view.onPause()
-            Lifecycle.Event.ON_STOP -> controller.view.onStop()
+            Lifecycle.Event.ON_PAUSE -> { controller.container.releaseGesture(); controller.view.onPause() }
+            Lifecycle.Event.ON_STOP -> { controller.container.releaseGesture(); controller.view.onStop() }
             else -> Unit
         } }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); controller.view.onPause(); controller.view.onStop(); controller.view.onDestroy() }
+        onDispose { lifecycle.removeObserver(observer); controller.container.releaseGesture(); controller.view.onPause(); controller.view.onStop(); controller.view.onDestroy() }
     }
-    AndroidView(factory={controller.view},modifier=modifier,update={controller.update(MapRender(route,geoJson,key,enabled,colored,annotations))})
+    AndroidView(factory={controller.container},modifier=modifier,update={controller.update(MapRender(route,geoJson,key,enabled,colored,annotations))})
 }

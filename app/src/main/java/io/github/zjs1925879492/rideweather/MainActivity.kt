@@ -65,6 +65,7 @@ private fun clock(epoch:Long):String = Instant.ofEpochSecond(epoch).atZone(BEIJI
 @Composable
 private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
     var page by rememberSaveable { mutableIntStateOf(0) }
+    var mapGestureActive by remember { mutableStateOf(false) }
     var link by rememberSaveable { mutableStateOf("") }
     var system by rememberSaveable { mutableStateOf(Coordinates.System.BD09.name) }
     LaunchedEffect(shared) { if(shared.isNotBlank()) { link=shared; page=0 } }
@@ -95,11 +96,11 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                 Text(s.status,style=MaterialTheme.typography.bodySmall,modifier=Modifier.padding(12.dp).testTag("status"))
             }
             key(page) {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState(),enabled=!mapGestureActive).padding(16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                 when(page) {
                     0 -> {
                         Card {
-                            RouteMap(s.route,s.geoJson,s.key,s.mapEnabled,false,Modifier.fillMaxWidth().height(310.dp).testTag("route_map")) { vm.message("底图暂不可用，请检查网络及天地图 Key 授权。轨迹仍可使用。",true) }
+                            RouteMap(s.route,s.geoJson,s.key,s.mapEnabled,false,Modifier.fillMaxWidth().height(310.dp).testTag("route_map"),onGestureActive={mapGestureActive=it}) { vm.message("底图暂不可用，请检查网络及天地图 Key 授权。轨迹仍可使用。",true) }
                             Text(if(s.mapEnabled) "© 天地图 · 国家地理信息公共服务平台" else "未启用在线底图 · 可在设置中填写自己的天地图 Key",style=MaterialTheme.typography.labelSmall,modifier=Modifier.padding(12.dp))
                         }
                         s.route?.let { route ->
@@ -142,7 +143,7 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                         else {
                             Text("${s.route.name} · ${number(s.km)} km",fontWeight=FontWeight.SemiBold)
                             Card {
-                                RouteMap(s.route,s.geoJson,s.key,s.mapEnabled,s.weather.isNotEmpty(),Modifier.fillMaxWidth().height(310.dp).testTag("weather_map"),annotations=true) { vm.message("底图暂不可用，请检查网络及天地图 Key 授权。轨迹仍可使用。",true) }
+                                RouteMap(s.route,s.geoJson,s.key,s.mapEnabled,s.weather.isNotEmpty(),Modifier.fillMaxWidth().height(310.dp).testTag("weather_map"),annotations=true,onGestureActive={mapGestureActive=it}) { vm.message("底图暂不可用，请检查网络及天地图 Key 授权。轨迹仍可使用。",true) }
                                 Text(if(s.mapEnabled) "© 天地图 · 沿途天气分区" else "沿途天气分区 · 未启用在线底图",style=MaterialTheme.typography.labelSmall,modifier=Modifier.padding(12.dp))
                             }
                             OutlinedButton(onClick={page=0},modifier=Modifier.testTag("edit_plan")) { Text("返回路线页调整行程") }
