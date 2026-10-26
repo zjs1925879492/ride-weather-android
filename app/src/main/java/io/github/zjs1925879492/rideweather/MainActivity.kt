@@ -73,11 +73,12 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
     Scaffold(containerColor=MaterialTheme.colorScheme.background,
         contentWindowInsets=WindowInsets.safeDrawing,
         bottomBar={ NavigationBar {
-            listOf("路线" to "","沿途天气" to "☀","收藏" to "","设置" to "⚙").forEachIndexed { i,(name,icon) ->
+            listOf("路线" to "","沿途天气" to "","收藏" to "","设置" to "⚙").forEachIndexed { i,(name,icon) ->
                 NavigationBarItem(selected=page==i,onClick={page=i},modifier=Modifier.testTag(listOf("nav_route","nav_weather","nav_favorites","nav_settings")[i]),icon={
                     when(i) {
                         0 -> Icon(painterResource(R.drawable.ic_bicycle),contentDescription=null,modifier=Modifier.size(24.dp))
-                        2 -> Icon(painterResource(R.drawable.ic_star),contentDescription=null,modifier=Modifier.size(24.dp))
+                        1 -> Icon(painterResource(if(page==i) R.drawable.ic_sun_selected else R.drawable.ic_sun),contentDescription=null,tint=if(page==i) Color.Unspecified else LocalContentColor.current,modifier=Modifier.size(24.dp))
+                        2 -> Icon(painterResource(if(page==i) R.drawable.ic_star_selected else R.drawable.ic_star),contentDescription=null,tint=if(page==i) Color.Unspecified else LocalContentColor.current,modifier=Modifier.size(24.dp))
                         else -> Text(icon,fontSize=23.sp)
                     }
                 },label={Text(name)})
