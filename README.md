@@ -1,6 +1,8 @@
 # 沿途 · 骑行天气 Android
 
-Kotlin + Jetpack Compose 原生应用。状态：0.1.9 开发原型，已提供仅 arm64 的优化测试 APK；本次地图触控版本尚待真机验收。尚未完成网页版全部功能迁移。
+Kotlin + Jetpack Compose 原生应用。[v0.1.9 正式 Release](https://github.com/zjs1925879492/ride-weather-android/releases/tag/v0.1.9) 已发布，用户已完成真机验收。尚未完成网页版全部功能迁移。
+
+[下载 arm64 APK](https://github.com/zjs1925879492/ride-weather-android/releases/download/v0.1.9/RideWeather-0.1.9-dev-arm64.apk) · 约 14.5 MB · Android 8.0 及以上。已有版本可覆盖安装；文件校验值见 Release 附件 SHA256SUMS.txt。
 
 ## 已实现
 
@@ -30,6 +32,6 @@ iGPSPORT 支持 `https://analyse.zh.igpsport.com/new/my/road/book/share?routeId=
 
 见 [构建与真机测试](docs/DEVELOPMENT.md) 和 [验证记录](docs/VALIDATION.md)。包名为 `io.github.zjs1925879492.rideweather`。当前 APK 使用开发签名，正式发布前需单独管理发布签名。
 
-面向 arm64-v8a / Android 8.0 及以上设备，不再包含 32 位 ARM 与 x86 库。`preview` 构建启用 R8 和资源裁剪，关闭调试，沿用现有开发签名方便覆盖测试；正式发布签名另行配置。当前精简包 14,483,824 字节，上一版通用开发包 61,620,824 字节。Release 暂停公开发布，先完成优化包验收。
+面向 arm64-v8a / Android 8.0 及以上设备，不再包含 32 位 ARM 与 x86 库。`preview` 构建启用 R8 和资源裁剪，关闭调试，沿用现有开发签名方便覆盖安装；正式分发签名的迁移另行安排。发布包内部版本名保留 `0.1.9-dev`，与已验收 APK 完全一致，GitHub Release 标记为正式版本。当前精简包 14,483,824 字节，上一版通用开发包 61,620,824 字节。
 
 原创代码采用 [MIT 许可证](LICENSE)。第三方库、地图与天气数据及服务授权遵循各自许可，见 [第三方声明](THIRD_PARTY_NOTICES.md)。开源许可证不授予第三方服务使用权。
