@@ -30,3 +30,13 @@ private-data/
 *.aab
 *.apks
 *.hprof
+
+# Local agent instructions and working notes
+[Aa][Gg][Ee][Nn][Tt]*.[Mm][Dd]
+[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]
+[Gg][Ee][Mm][Ii][Nn][Ii].[Mm][Dd]
+[Ss][Kk][Ii][Ll][Ll].[Mm][Dd]
+.agents/**/*.md
+.codex/**/*.md
+.claude/**/*.md
+.gemini/**/*.md
