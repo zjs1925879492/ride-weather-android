@@ -2,11 +2,7 @@
 
 package io.github.zjs1925879492.rideweather
 
-import android.content.Context
-import android.content.ClipData
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.net.Uri
 import androidx.activity.ComponentActivity
@@ -25,8 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -44,8 +39,6 @@ import io.github.zjs1925879492.rideweather.core.*
 import io.github.zjs1925879492.rideweather.data.Favorite
 import io.github.zjs1925879492.rideweather.ui.RouteMap
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
-import java.security.MessageDigest
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -80,8 +73,14 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
     Scaffold(containerColor=MaterialTheme.colorScheme.background,
         contentWindowInsets=WindowInsets.safeDrawing,
         bottomBar={ NavigationBar {
-            listOf("路线" to "↗","沿途天气" to "☀","收藏" to "♡","设置" to "⚙").forEachIndexed { i,(name,icon) ->
-                NavigationBarItem(selected=page==i,onClick={page=i},modifier=Modifier.testTag(listOf("nav_route","nav_weather","nav_favorites","nav_settings")[i]),icon={Text(icon,fontSize=23.sp)},label={Text(name)})
+            listOf("路线" to "","沿途天气" to "☀","收藏" to "","设置" to "⚙").forEachIndexed { i,(name,icon) ->
+                NavigationBarItem(selected=page==i,onClick={page=i},modifier=Modifier.testTag(listOf("nav_route","nav_weather","nav_favorites","nav_settings")[i]),icon={
+                    when(i) {
+                        0 -> Icon(painterResource(R.drawable.ic_bicycle),contentDescription=null,modifier=Modifier.size(24.dp))
+                        2 -> Icon(painterResource(R.drawable.ic_star),contentDescription=null,modifier=Modifier.size(24.dp))
+                        else -> Text(icon,fontSize=23.sp)
+                    }
+                },label={Text(name)})
             }
         } }
     ) { padding ->
@@ -105,7 +104,6 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                         s.route?.let { route ->
                             Section(route.name) {
                                 Text("${number(s.km)} km  /  ${route.pointCount} 点  /  ${route.segments.size} 段",fontWeight=FontWeight.SemiBold)
-                                Text(route.note,style=MaterialTheme.typography.bodySmall)
                                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton(onClick=vm::saveFavorite,enabled=!s.busy,modifier=Modifier.testTag("save_favorite")) { Text("收藏到本机") }
                                     OutlinedButton(onClick={ export.launch(route.name.replace(Regex("[\\\\/:*?\"<>|]"),"_").take(80)+".gpx") },enabled=!s.busy) { Text("导出 GPX") }
@@ -125,7 +123,6 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                                 }
                             }
                             Button(onClick={vm.importShare(link,Coordinates.System.valueOf(system))},enabled=!s.busy && link.isNotBlank(),modifier=Modifier.fillMaxWidth().testTag("import_share")) { Text("直接导入公开路线") }
-                            Text("路线在手机中解析。演示轨迹为合成数据，不用于实际骑行导航。",style=MaterialTheme.typography.bodySmall)
                         }
                         Section("安排这次出发") {
                             OutlinedTextField(s.start,{vm.field("start",it)},label={Text("出发时间 · 北京时间")},supportingText={Text("格式：2026-10-26 08:00")},modifier=Modifier.fillMaxWidth().testTag("plan_start"),singleLine=true,enabled=!s.busy)
@@ -159,8 +156,6 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                         }
                     }
                     2 -> {
-                        Text("只存在这台手机里的路线",style=MaterialTheme.typography.titleLarge)
-                        Text("收藏保留完整分段和可用高程。载入时保留当前出发时间，天气需重新查询。",style=MaterialTheme.typography.bodySmall)
                         if(s.favorites.isEmpty()) Text("还没有收藏。导入路线后，点击“收藏到本机”。")
                         s.favorites.forEach { favorite -> FavoriteCard(favorite,s.busy,onLoad={vm.loadFavorite(favorite);page=0},onDelete={vm.deleteFavorite(favorite)}) }
                     }
@@ -238,18 +233,10 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
     }
     if(confirm) AlertDialog(onDismissRequest={confirm=false},title={Text("删除这条收藏？")},text={Text(favorite.name)},confirmButton={TextButton(onClick={confirm=false;onDelete()}) { Text("删除") }},dismissButton={TextButton(onClick={confirm=false}) { Text("取消") }})
 }
-@Suppress("DEPRECATION")
-private fun signingIdentity(context:Context):String {
-    val info=if(Build.VERSION.SDK_INT>=28) context.packageManager.getPackageInfo(context.packageName,PackageManager.GET_SIGNING_CERTIFICATES) else context.packageManager.getPackageInfo(context.packageName,PackageManager.GET_SIGNATURES)
-    val signatures=if(Build.VERSION.SDK_INT>=28) info.signingInfo?.apkContentsSigners else info.signatures
-    fun fingerprint(bytes:ByteArray,algorithm:String)=MessageDigest.getInstance(algorithm).digest(bytes).joinToString(":") { "%02X".format(it.toInt() and 255) }
-    return buildString { append("包名：${context.packageName}\n"); signatures.orEmpty().forEach { append("SHA-1：${fingerprint(it.toByteArray(),"SHA-1")}\nSHA-256：${fingerprint(it.toByteArray(),"SHA-256")}\n") } }
-}
 @Composable private fun SettingsPage(s:UiState,vm:MainViewModel) {
     var key by remember(s.key) { mutableStateOf(s.key) }; var show by rememberSaveable { mutableStateOf(false) }
-    val context=LocalContext.current; val clipboard=LocalClipboard.current; val scope=rememberCoroutineScope()
+    val context=LocalContext.current
     var showLicenses by remember { mutableStateOf(false) }
-    val identity=remember(context) { runCatching { signingIdentity(context) }.getOrDefault("暂时无法读取安装包签名") }
     Section("使用你自己的天地图") {
         OutlinedTextField(key,{key=it.trim()},label={Text("天地图 Key")},modifier=Modifier.fillMaxWidth().testTag("map_key_input"),singleLine=true,enabled=!s.busy,visualTransformation=if(show) VisualTransformation.None else PasswordVisualTransformation())
         Row { Checkbox(show,{show=it}); Text("显示 Key",modifier=Modifier.padding(top=12.dp)) }
@@ -258,14 +245,6 @@ private fun signingIdentity(context:Context):String {
             TextButton(onClick={vm.disableMap()},enabled=!s.busy) { Text("关闭底图") }
             TextButton(onClick={vm.disableMap(true);key=""},enabled=!s.busy) { Text("删除本机 Key") }
         }
-        Text("当前通过天地图 WMTS 瓦片服务加载矢量底图与中文注记。适用 Key 类型和权限以天地图控制台为准；这不是天地图官方 Android SDK 的签名鉴权。",style=MaterialTheme.typography.bodySmall)
-        Text(if(s.mapEnabled) "底图已启用，下次启动自动恢复。" else "底图已关闭。",modifier=Modifier.testTag("map_enabled_status"))
-        Text("Key 使用 Android Keystore 加密后保存在手机中，启用状态一并保存。只有启用底图时才向天地图发送请求。",style=MaterialTheme.typography.bodySmall)
-    }
-    Section("应用身份") {
-        Text(identity,style=MaterialTheme.typography.bodySmall,modifier=Modifier.testTag("signing_identity"))
-        OutlinedButton(onClick={scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("应用身份",identity)));vm.message("包名和证书指纹已复制") }}) { Text("复制包名与签名指纹") }
-        Text("这里读取的是当前安装包实际使用的签名证书。开发版与以后正式版的指纹可能不同。",style=MaterialTheme.typography.bodySmall)
     }
     Section("数据与连接") {
         Text("路线、行程计算、收藏及导出在手机上完成。公开路线、天气和地图由手机直接请求第三方服务，没有我们的中转服务器。")

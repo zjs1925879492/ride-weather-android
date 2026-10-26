@@ -84,13 +84,12 @@ class NativeFlowTest {
             if(!alreadySaved) store.delete(route.fingerprint())
         }
     }
-    @Test fun signingIdentityAndInvalidKeyFeedback() {
+    @Test fun invalidMapKeyFeedback() {
         val enabled=vm.state.value.mapEnabled
         ui.onNodeWithTag("nav_settings").performClick()
         ui.onNodeWithTag("map_key_input").performTextReplacement("invalid-key")
         ui.onNodeWithTag("verify_map").performScrollTo().performClick(); settled()
         assertTrue(vm.state.value.error); assertEquals(enabled,vm.state.value.mapEnabled)
-        ui.onNodeWithTag("signing_identity").performScrollTo().assertTextContains("包名：io.github.zjs1925879492.rideweather",substring=true).assertTextContains("SHA-1：",substring=true).assertTextContains("SHA-256：",substring=true)
     }
     @Test fun directOnelapImportOnDevice() {
         ui.onNodeWithTag("share_input").performScrollTo().performTextReplacement("https://www.onelap.cn/bikeroute/detail.html?id=54848&routeType=route")
