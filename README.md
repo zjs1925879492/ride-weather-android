@@ -1,6 +1,6 @@
 # 沿途 · 骑行天气 Android
 
-Kotlin + Jetpack Compose 原生应用。状态：0.1.6 开发原型，已有可构建 APK；0.1.0 已通过 Android 16 真机测试，本次升级尚待真机验收。尚未完成网页版全部功能迁移。
+Kotlin + Jetpack Compose 原生应用。状态：0.1.7 开发原型，已提供仅 arm64 的优化测试 APK；本次裁剪版本尚待真机验收。尚未完成网页版全部功能迁移。
 
 ## 已实现
 
@@ -27,5 +27,7 @@ Kotlin + Jetpack Compose 原生应用。状态：0.1.6 开发原型，已有可�
 iGPSPORT 支持 `https://analyse.zh.igpsport.com/new/my/road/book/share?routeId=70714&language=zh-Hans` 及 `/new/road/book/share` 路径。手机匿名直连官方公开接口，导入后可收藏、查询天气和导出 GPX。需要登录或没有公开权限的路书可从原平台导出 GPX 后导入。输入限唯一正整数 routeId，响应限 8 MB、150,000 点及 2,000 途经点；接口变更可能影响可用性。
 
 见 [构建与真机测试](docs/DEVELOPMENT.md) 和 [验证记录](docs/VALIDATION.md)。包名为 `io.github.zjs1925879492.rideweather`。当前 APK 使用开发签名，正式发布前需单独管理发布签名。
+
+面向 arm64-v8a / Android 8.0 及以上设备，不再包含 32 位 ARM 与 x86 库。`preview` 构建启用 R8 和资源裁剪，关闭调试，沿用现有开发签名方便覆盖测试；正式发布签名另行配置。当前精简包 14,483,824 字节，上一版通用开发包 61,620,824 字节。Release 暂停公开发布，先完成优化包验收。
 
 原创代码采用 [MIT 许可证](LICENSE)。第三方库、地图与天气数据及服务授权遵循各自许可，见 [第三方声明](THIRD_PARTY_NOTICES.md)。开源许可证不授予第三方服务使用权。

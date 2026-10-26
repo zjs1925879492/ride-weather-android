@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory=$true)][string]$WorkDirectory,
     [string]$SdkDirectory=$env:ANDROID_HOME,
     [string]$JdkDirectory=$env:JAVA_HOME,
-    [switch]$LiveNetwork
+    [switch]$LiveNetwork,
+    [switch]$Optimized
 )
 $ErrorActionPreference='Stop'
 $taskWorkDirectory=[IO.Path]::GetFullPath($WorkDirectory)
@@ -17,7 +18,10 @@ $env:RIDEWEATHER_LIVE_TESTS=if($LiveNetwork){'true'}else{'false'}
 $taskProjectDirectory=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location -LiteralPath $taskProjectDirectory
 try {
-    & '.\gradlew.bat' :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --console=plain
+    $taskVariant=if($Optimized){'preview'}else{'debug'}
+    $taskAssemble=if($Optimized){':app:assemblePreview'}else{':app:assembleDebug'}
+    $taskLint=if($Optimized){':app:lintPreview'}else{':app:lintDebug'}
+    & '.\gradlew.bat' $taskAssemble :app:testDebugUnitTest $taskLint --console=plain
     if($LASTEXITCODE -ne 0){throw "Build/check failed ($LASTEXITCODE)."}
-    Write-Output ('APK: '+(Join-Path $env:RIDEWEATHER_BUILD_ROOT 'app\outputs\apk\debug\app-debug.apk'))
+    Write-Output ('APK: '+(Join-Path $env:RIDEWEATHER_BUILD_ROOT "app\outputs\apk\$taskVariant\app-$taskVariant.apk"))
 } finally { Pop-Location }

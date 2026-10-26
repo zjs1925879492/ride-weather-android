@@ -12,9 +12,24 @@ android {
         applicationId = "io.github.zjs1925879492.rideweather"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.1.6-dev"
+        versionCode = 8
+        versionName = "0.1.7-dev"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk { abiFilters += "arm64-v8a" }
+    }
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+        }
+        // Optimized local testing build, signed compatibly with existing installs.
+        // Production release signing stays separate and is not configured here.
+        create("preview") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -35,8 +50,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("org.maplibre.gl:android-sdk:13.5.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")

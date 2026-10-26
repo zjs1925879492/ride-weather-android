@@ -4,7 +4,7 @@
 
 - JDK 21，Android SDK Platform 36、Build-Tools 36.0.0、Platform-Tools。
 - Gradle 8.13 Wrapper、AGP 8.13.2、Kotlin 2.2.21 已在工程固定。
-- Android 8.0 / API 26 及以上设备；目标与编译 API 36。
+- arm64-v8a、Android 8.0 / API 26 及以上设备；目标与编译 API 36。
 - 不需要全局 Gradle、Kotlin、Python、Node.js、NDK 或本项目云服务器。
 - 首次构建需要访问 Google Maven、Maven Central 和 Gradle 分发站。
 
@@ -15,6 +15,10 @@
 ```
 
 执行 APK 构建、JVM 单元测试与 lint。APK 位于指定工作目录的 outputs/app/outputs/apk/debug/app-debug.apk。加 -LiveNetwork 启用公开第三方接口测试，默认跳过联网测试。
+
+交付精简包时加 `-Optimized`，生成 `outputs/app/outputs/apk/preview/app-preview.apk`。`preview` 基于发布构建启用 R8 代码优化和资源裁剪，非 debuggable，使用已有开发签名兼容测试安装；`release` 不内置正式签名。Compose 预览 / 调试工具依赖已移除。所有变体只包含 arm64；不再支持 x86 模拟器或 32 位手机。
+
+也可直接运行 `./gradlew :app:assemblePreview :app:testDebugUnitTest :app:lintPreview`。JVM 测试验证业务逻辑，优化 APK 的地图 JNI、启动及导入流程仍需独立真机验收。保留 R8 mapping 与配置报告用于定位混淆后的错误，不将其作为运行时资源打入 APK。
 
 其他系统可设置 SDK、JDK 后使用 `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`。RIDEWEATHER_BUILD_ROOT 可选，用于指定编译输出根目录。
 
