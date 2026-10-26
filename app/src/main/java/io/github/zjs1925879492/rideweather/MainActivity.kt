@@ -116,7 +116,7 @@ private fun RideApp(vm:MainViewModel,s:UiState,shared:String) {
                                 Button(onClick={ import.launch(arrayOf("*/*")) },enabled=!s.busy) { Text("导入 GPX") }
                                 OutlinedButton(onClick=vm::demo,enabled=!s.busy,modifier=Modifier.testTag("load_demo")) { Text("载入演示") }
                             }
-                            OutlinedTextField(link,{link=it},label={Text("顽鹿 / 行者公开分享链接")},modifier=Modifier.fillMaxWidth().testTag("share_input"),enabled=!s.busy,minLines=2,maxLines=4)
+                            OutlinedTextField(link,{link=it},label={Text("顽鹿 / 行者 / iGPSPORT 分享链接")},modifier=Modifier.fillMaxWidth().testTag("share_input"),enabled=!s.busy,minLines=2,maxLines=4)
                             if(link.contains("onelap.cn")) {
                                 Text("顽鹿源坐标：默认选项来自既有样本推断，请按路线实际情况选择。",style=MaterialTheme.typography.bodySmall)
                                 Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {

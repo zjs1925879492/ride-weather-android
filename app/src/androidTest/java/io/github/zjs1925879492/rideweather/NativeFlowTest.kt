@@ -91,6 +91,18 @@ class NativeFlowTest {
         ui.onNodeWithTag("verify_map").performScrollTo().performClick(); settled()
         assertTrue(vm.state.value.error); assertEquals(enabled,vm.state.value.mapEnabled)
     }
+    @Test fun directIgpsportImportOnDevice() {
+        ui.onNodeWithTag("share_input").performScrollTo().performTextReplacement("https://analyse.zh.igpsport.com/new/my/road/book/share?routeId=70714&language=zh-Hans")
+        ui.onNodeWithTag("import_share").performScrollTo().performClick(); settled()
+        assertFalse(vm.state.value.status,vm.state.value.error)
+        val route=vm.state.value.route!!
+        assertEquals(3946,route.pointCount); assertTrue(route.segments.single().all { it.elevation!=null })
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        val store=RouteStore(context)
+        val saved=store.list().any { it.id==route.fingerprint() }
+        try { if(!saved) store.save(route,"22","30","20"); assertEquals(route,store.load(route.fingerprint())) }
+        finally { if(!saved) store.delete(route.fingerprint()); store.close() }
+    }
     @Test fun directOnelapImportOnDevice() {
         ui.onNodeWithTag("share_input").performScrollTo().performTextReplacement("https://www.onelap.cn/bikeroute/detail.html?id=54848&routeType=route")
         ui.onNodeWithTag("import_share").performScrollTo().performClick(); settled()

@@ -18,8 +18,10 @@ class PublicHttp {
     fun bytes(url:String,limit:Int=8*1024*1024):ByteArray {
         val parsed=url.toHttpUrl()
         require(parsed.isHttps && parsed.username.isEmpty() && parsed.password.isEmpty() && parsed.port==443) { "仅支持 HTTPS 公共数据" }
-        require(parsed.host in setOf("www.onelap.cn","www.imxingzhe.com","xingzhe.oss-cn-hangzhou.aliyuncs.com","api.open-meteo.com","t0.tianditu.gov.cn")) { "数据地址不在允许范围内" }
-        client.newCall(Request.Builder().url(parsed).header("Accept","application/json,image/png,*/*").header("User-Agent","RideWeather-Android/0.1").build()).execute().use { response ->
+        require(parsed.host in setOf("www.onelap.cn","www.imxingzhe.com","xingzhe.oss-cn-hangzhou.aliyuncs.com","prod.zh.igpsport.com","api.open-meteo.com","t0.tianditu.gov.cn")) { "数据地址不在允许范围内" }
+        val call=client.newCall(Request.Builder().url(parsed).header("Accept","application/json,image/png,*/*").header("User-Agent","RideWeather-Android/0.1").build())
+        if(parsed.host=="prod.zh.igpsport.com") call.timeout().timeout(30,TimeUnit.SECONDS)
+        call.execute().use { response ->
             when(response.code) { 401,403 -> error("数据源拒绝访问或需要授权，请核对权限；路书可改用本地 GPX 导入") }
             require(response.isSuccessful) { "数据源返回 HTTP ${response.code}，请稍后重试" }
             val body=requireNotNull(response.body) { "数据源未返回内容" }
@@ -33,10 +35,17 @@ object PublicRoutes {
     data class Share(val platform:String,val id:String,val type:String,val url:String)
     fun share(text:String):Share {
         require(text.length<=5000) { "分享内容过长" }
-        val value=Regex("https://(?:www\\.)?(?:onelap\\.cn|imxingzhe\\.com)/[^\\s<>]+",RegexOption.IGNORE_CASE).find(text.trim())?.value?.trimEnd('，','。',')',']') ?: error("请粘贴顽鹿或行者的 HTTPS 公开路书链接")
+        val value=Regex("https://(?:(?:www\\.)?(?:onelap\\.cn|imxingzhe\\.com)|analyse\\.zh\\.igpsport\\.com)/[^\\s<>]+",RegexOption.IGNORE_CASE).find(text.trim())?.value?.trimEnd('，','。',')',']')?.replace("&amp;","&") ?: error("请粘贴顽鹿、行者或 iGPSPORT 的 HTTPS 公开路书链接")
         val url=URI(value)
         require(url.scheme=="https" && url.userInfo==null && url.port==-1 && url.fragment==null) { "分享链接格式无效" }
         return when(url.host) {
+            "analyse.zh.igpsport.com" -> {
+                require(value.length<=3000 && Regex("^/new/(?:my/)?road/book/share/?$").matches(url.rawPath)) { "请使用 iGPSPORT 国内站公开路书分享页链接" }
+                val ids=value.toHttpUrl().queryParameterValues("routeId")
+                require(ids.size==1 && Regex("[1-9][0-9]{0,11}").matches(ids.single().orEmpty())) { "iGPSPORT 分享链接需要唯一有效的 routeId" }
+                val id=ids.single()!!
+                Share("igpsport",id,"route","https://analyse.zh.igpsport.com/new/my/road/book/share?routeId=$id&language=zh-Hans")
+            }
             "www.imxingzhe.com","imxingzhe.com" -> {
                 val id=Regex("^/routes/([1-9][0-9]{0,11})/?$").matchEntire(url.path)?.groupValues?.get(1) ?: error("行者链接需包含 /routes/数字ID/")
                 Share("xingzhe",id,"route","https://www.imxingzhe.com/routes/$id/")
@@ -51,7 +60,30 @@ object PublicRoutes {
     }
     fun load(text:String,coordinates:Coordinates.System,http:PublicHttp):Route {
         val share=share(text)
-        return if(share.platform=="xingzhe") xingzhe(share,http) else onelap(share,coordinates,http)
+        return when(share.platform) { "igpsport" -> parseIgpsport(http.json("https://prod.zh.igpsport.com/service/sportg/roadbook4j/road-book/detailsRoutesShare?routeId=${share.id}"),share); "xingzhe" -> xingzhe(share,http); else -> onelap(share,coordinates,http) }
+    }
+    fun parseIgpsport(response:JSONObject,share:Share):Route {
+        require(share.platform=="igpsport" && share==PublicRoutes.share(share.url)) { "iGPSPORT 分享信息无效" }
+        require((response.opt("code") as? Number)?.toDouble()==0.0) { "iGPSPORT 未提供公开路书或需要登录，请改用本地 GPX 导入" }
+        val data=response.getJSONObject("data"); val summary=data.getJSONObject("summary")
+        require(summary.optString("roadId")==share.id) { "iGPSPORT 返回路书与分享 ID 不一致" }
+        val tracks=data.getJSONObject("routeInfo").getJSONArray("tracks")
+        require(tracks.length() in 2..MAX_POINTS) { "iGPSPORT 轨迹需包含 2–150,000 个点" }
+        fun coordinate(p:JSONObject,key:String):Double = (p.opt(key) as? Number)?.toDouble()?.takeIf(Double::isFinite) ?: error("iGPSPORT 轨迹含无效坐标")
+        // The official share renderer converts these raw WGS84 coordinates to
+        // GCJ02 for its own map. Keep the original coordinates for this app.
+        val points=(0 until tracks.length()).map { i ->
+            val p=tracks.getJSONObject(i)
+            TrackPoint(coordinate(p,"latitude"),coordinate(p,"longitute"),(p.opt("alt") as? Number)?.toDouble()?.takeIf { it.isFinite() && it in -12000.0..10000.0 })
+        }
+        val auxiliary=if(!data.has("roadBookAuxiliaryPoint") || data.isNull("roadBookAuxiliaryPoint")) JSONArray() else data.getJSONArray("roadBookAuxiliaryPoint")
+        require(auxiliary.length()<=2000) { "iGPSPORT 途经点超过 2,000 个" }
+        val waypoints=(0 until auxiliary.length()).map { i ->
+            val p=auxiliary.getJSONObject(i)
+            Waypoint(TrackPoint(coordinate(p,"latitude"),coordinate(p,"longitude")),((p.opt("name") as? String) ?: (p.opt("title") as? String) ?: "途经点").take(120))
+        }
+        return Route((summary.opt("title") as? String)?.trim()?.takeIf { it.isNotEmpty() }?.take(120) ?: "iGPSPORT 路书 ${share.id}",listOf(points),share.url,
+            "iGPSPORT 官方公开分享轨迹，原始 WGS84 坐标，保留可用高程与途经点。",waypoints)
     }
     private fun onelap(share:Share,system:Coordinates.System,http:PublicHttp):Route {
         val path=if(share.type=="route") "/api/road/road_book/${share.id}" else "/indoor/v1/navigation/share/detail/${share.id}"
